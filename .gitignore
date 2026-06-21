@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+.env.*
+
+# Claude personal notes (not committed — private companion to CLAUDE.md)
+CLAUDE.local.md
