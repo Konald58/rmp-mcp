@@ -137,15 +137,39 @@ def _tier(rating: float) -> str:
     return "poor"
 
 
+class RMPError(Exception):
+    """Raised when the RMP GraphQL endpoint can't be reached or returns something unusable."""
+
+
 async def _gql(query: str, variables: dict) -> dict:
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(
-            RMP_URL,
-            headers=HEADERS,
-            json={"query": query, "variables": variables},
-        )
-        resp.raise_for_status()
-        return resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                RMP_URL,
+                headers=HEADERS,
+                json={"query": query, "variables": variables},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.TimeoutException as exc:
+        logger.warning("RMP request timed out: %s", exc)
+        raise RMPError(
+            "Rate My Professors took too long to respond. Please try again."
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        logger.warning("RMP request failed with status %s", exc.response.status_code)
+        raise RMPError(
+            f"Rate My Professors returned an error (HTTP {exc.response.status_code})."
+        ) from exc
+    except httpx.HTTPError as exc:
+        logger.warning("RMP request failed: %s", exc)
+        raise RMPError(
+            "Couldn't reach Rate My Professors. Please try again later."
+        ) from exc
+    except ValueError as exc:
+        # httpx raises json.JSONDecodeError (a ValueError subclass) on malformed JSON
+        logger.warning("RMP response was not valid JSON: %s", exc)
+        raise RMPError("Rate My Professors returned an unexpected response.") from exc
 
 
 async def _resolve_school(school_name: str) -> Optional[dict]:
