@@ -12,3 +12,11 @@ __pycache__/
 
 # Claude personal notes (not committed — private companion to CLAUDE.md)
 CLAUDE.local.md
+
+# Packaging / tests
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/

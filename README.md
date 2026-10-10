@@ -1,102 +1,203 @@
 # Rate My Professors MCP Server
 
-An MCP (Model Context Protocol) server that lets Claude search, compare, and rank professors using Rate My Professors data — works at any of the ~1,400 universities on RMP.
+An [MCP](https://modelcontextprotocol.io) server that lets any AI client search, compare and rank professors with [Rate My Professors](https://www.ratemyprofessors.com) data, at any of the ~1,400 universities RMP covers. Works with Claude, Cursor, VS Code, Windsurf, Gemini CLI, Codex, Zed, ChatGPT and anything else that speaks MCP over stdio or Streamable HTTP.
 
-> **Testing note:** Verified at University of South Florida (USF Tampa). Other universities should work since they all use the same RMP GraphQL endpoint, but results are unverified.
+No API key. No account. One command to install.
 
----
+## What you can ask
 
-## What it does
-
-Ask Claude things like:
-- *"Who's the best professor for Calculus 2 at my university?"*
-- *"Compare Smith and Johnson for COP3514"*
-- *"What are the top-rated CS professors at USF?"*
-- *"Find me a professor for Linear Algebra who's highly rated and not too hard"*
+- "Who's the best professor for Calculus 2 at my university?"
+- "Compare Smith and Johnson for COP3514"
+- "What are the top-rated CS professors at UCF?"
+- "Show me the rating distribution and recent reviews for Kenneth Mitchell"
 
 ## Tools
 
-| Tool | Description |
+| Tool | What it does |
 |---|---|
-| `search_school` | Find a university by name → get its school ID |
-| `search_professor` | Look up a professor's rating, difficulty, would-take-again% |
-| `compare_professors` | Side-by-side comparison of multiple professors, ranked by rating |
-| `get_top_professors` | Top-rated professors at a school, optionally filtered by department |
+| `search_school` | Find a university by name. Returns up to five campuses, best first, with the `school_id` the other tools need |
+| `search_professor` | Look up one professor by "Smith", "J. Smith", "John Smith" or "Smith, John". Strict last-name match; flags `ambiguous` and lists every candidate when several share the name |
+| `get_professor_details` | Rating distribution (Awesome to Awful) plus the five most recent reviews |
+| `compare_professors` | Several professors at one school, ranked by rating, looked up concurrently |
+| `get_top_professors` | Highest-rated professors at a school, optionally filtered by department, from a broad A-to-Z search sample |
 
-## Companion project
+Every tool is read-only and idempotent, and says so in its annotations, so clients that gate on annotations do not prompt per call.
 
-This MCP server pairs with the **[Professor Ratings for Banner](https://github.com/Konald58/usf-rmp-extension)** Chrome extension, which injects RMP ratings directly into your university's Banner SSB9 course registration system. Same API, two different workflows:
+## Install
 
-- **Chrome extension** → ratings inline during registration
-- **MCP server** → conversational research with Claude before you even open Banner
-
----
-
-## Installation
-
-### 1. Clone and set up
+Requires Python 3.10+. The quickest path is [uv](https://docs.astral.sh/uv/), which runs the server in an isolated environment:
 
 ```bash
-git clone https://github.com/Konald58/rmp-mcp.git
-cd rmp-mcp
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+uvx rmp-mcp
 ```
 
-### 2. Add to Claude
+Or with pip:
 
 ```bash
-claude mcp add-json rmp-mcp '{
-  "type": "stdio",
-  "command": "/absolute/path/to/rmp-mcp/.venv/bin/python",
-  "args": ["/absolute/path/to/rmp-mcp/server.py"]
-}'
+pip install rmp-mcp
+rmp-mcp
 ```
 
-Replace `/absolute/path/to/rmp-mcp` with your actual path (e.g. `/Users/yourname/rmp-mcp`).
+Until the PyPI release lands you can run straight from GitHub:
 
-### 3. Restart Claude and test
+```bash
+uvx --from git+https://github.com/Konald58/rmp-mcp rmp-mcp
+```
+
+Options:
+
+```
+rmp-mcp [--transport stdio|http] [--host 127.0.0.1] [--port 8000] [--version]
+```
+
+`stdio` (default) is what local desktop and CLI clients use. `http` serves Streamable HTTP at `http://HOST:PORT/mcp` for URL-based clients.
+
+## Add it to your client
+
+All stdio configs are the same shape: command `uvx`, args `["rmp-mcp"]`. If you installed with pip instead, use command `rmp-mcp` with no args.
+
+### Claude Desktop
+
+`claude_desktop_config.json` (Settings > Developer > Edit Config):
+
+```json
+{
+  "mcpServers": {
+    "rmp": { "command": "uvx", "args": ["rmp-mcp"] }
+  }
+}
+```
+
+### Claude Code
+
+```bash
+claude mcp add rmp -- uvx rmp-mcp
+```
+
+### Cursor
+
+`.cursor/mcp.json` in your project, or `~/.cursor/mcp.json` globally:
+
+```json
+{
+  "mcpServers": {
+    "rmp": { "command": "uvx", "args": ["rmp-mcp"] }
+  }
+}
+```
+
+### VS Code (GitHub Copilot)
+
+`.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "rmp": { "type": "stdio", "command": "uvx", "args": ["rmp-mcp"] }
+  }
+}
+```
+
+### Windsurf
+
+`~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "rmp": { "command": "uvx", "args": ["rmp-mcp"] }
+  }
+}
+```
+
+### Gemini CLI
+
+`~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "rmp": { "command": "uvx", "args": ["rmp-mcp"] }
+  }
+}
+```
+
+### Codex CLI
+
+`~/.codex/config.toml`:
+
+```toml
+[mcp_servers.rmp]
+command = "uvx"
+args = ["rmp-mcp"]
+```
+
+### Zed
+
+`settings.json`:
+
+```json
+{
+  "context_servers": {
+    "rmp": { "source": "custom", "command": "uvx", "args": ["rmp-mcp"] }
+  }
+}
+```
+
+### ChatGPT, claude.ai on the web, and other URL-based clients
+
+These need a reachable HTTP endpoint. Run the server with the HTTP transport, expose it (a tunnel such as `cloudflared` or `ngrok` is enough for personal use), and add the URL as a custom connector:
+
+```bash
+rmp-mcp --transport http --host 0.0.0.0 --port 8000
+# endpoint: http://<your-host>:8000/mcp
+```
+
+The server has no authentication of its own. Put it behind your tunnel's access controls rather than on the open internet.
+
+## Try it
 
 ```
 Find the school ID for University of South Florida
 ```
 
 ```
-Search for professor Smith at school ID U2Nob29sLTEyNjI=
+Compare Joel Smith and Tom Smith at that school
 ```
 
----
-
-## Usage example
-
 ```
-You: Who are the top Computer Science professors at USF?
-
-Claude: [calls search_school("University of South Florida")]
-        [calls get_top_professors(school_id=..., department="Computer Science")]
-
-        Here are the top-rated CS professors at USF based on Rate My Professors:
-
-        1. Dr. Jane Doe — 4.8/5 · Difficulty 2.1 · 96% would take again (142 ratings)
-        2. Dr. John Smith — 4.6/5 · Difficulty 3.2 · 88% would take again (89 ratings)
-        ...
+Show me details for professor 3050642
 ```
-
----
 
 ## How it works
 
-Uses Rate My Professors' public GraphQL endpoint — the same one the official RMP website uses. No API key or authentication required.
+The server talks to the same public GraphQL endpoint the RMP website uses, with at most six requests in flight at once. Name matching is strict: the last name must match exactly, a first name or initial narrows the set, and if several professors still match you get all of them plus an `ambiguous` flag instead of a silent guess. This is the same rule set as the companion Chrome extension.
 
----
+## Companion project
+
+[Professor Ratings for Course Search](https://github.com/Konald58/rmp-extension) is a Chrome extension that injects the same ratings directly into Banner, PeopleSoft and UO DuckWeb registration pages. Same data, two workflows:
+
+- Chrome extension: ratings inline while you register
+- MCP server: conversational research in whichever AI client you already use
+
+## Development
+
+```bash
+git clone https://github.com/Konald58/rmp-mcp.git
+cd rmp-mcp
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest            # canned responses, no network
+ruff check src tests
+bandit -r src
+```
+
+Layout: `src/rmp_mcp/client.py` (GraphQL client, concurrency cap, error mapping), `matching.py` (name parsing and strict matching), `server.py` (tools and CLI). The root `server.py` is a shim so configs from before 1.0 keep working.
 
 ## Disclaimer
 
-This project is not affiliated with Rate My Professors. Data is sourced from their public GraphQL API and reflects community-submitted ratings. Always use professor ratings as one input among many when choosing courses.
+Not affiliated with Rate My Professors. Data comes from their public GraphQL API and reflects community-submitted ratings. Use it as one input among many when choosing courses.
 
----
+## License
 
-## Related
-
-- [Professor Ratings for Banner](https://github.com/Konald58/usf-rmp-extension) — Chrome extension companion
+[MIT](LICENSE)

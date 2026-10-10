@@ -1,2 +1,2 @@
-fastmcp>=2.0
-httpx>=0.27
+# Kept for people who cloned before 1.0. Prefer: pip install -e ".[dev]"
+-e .
