@@ -13,7 +13,7 @@ conversational interface instead of in-page injection.
 
 ## Where it stands (2026-10-10)
 
-- **1.0.0 built on `feat/universal-package`, not yet published.** Restructured into
+- **1.0.0 built and merged to `main` (local), not yet pushed or published.** Restructured into
   `src/rmp_mcp/` (`client.py`, `matching.py`, `server.py`) with `pyproject.toml`, an
   `rmp-mcp` console script, `--transport stdio|http`, tool annotations, MIT LICENSE,
   CHANGELOG, `server.json` for the MCP registry, and a README with a config block per client.
@@ -22,7 +22,12 @@ conversational interface instead of in-page injection.
   `compare_professors` (strict matching ported from the extension, `ambiguous` flag plus
   candidate list instead of a silent first hit), new `get_professor_details` (distribution plus
   five recent reviews), `get_top_professors` (26-letter sweep, 6 concurrent max).
-- 40 tests with canned GraphQL responses, 97% coverage, ruff and bandit clean. Live-verified at
+- 64 tests with canned GraphQL responses, 98% coverage, ruff and bandit clean. A fresh-context
+  review (2026-10-10) found 15 items; all fixed: strict matching now rejects a wrong first initial
+  and flags an unmatched first name, middle initials and suffixes parse, GraphQL `errors` and
+  non-object payloads raise `RMPError`, errors reach clients as `ToolError`, partial failures are
+  reported, inputs are bounded, review text is capped and flagged untrusted, HTTP bind warns off
+  loopback, the semaphore cache holds a weakref, ids accept URLs. Live-verified at
   USF, NAU and UCF on 2026-10-09 (the old "USF only" caveat is gone).
 - Local Claude Code registration switched to the console script (`.venv/bin/rmp-mcp`).
 - Wheel and sdist built in `dist/`.
@@ -32,7 +37,7 @@ conversational interface instead of in-page injection.
 - Kon's go, then: `twine upload dist/*` to PyPI (name `rmp-mcp` is free), publish
   `server.json` to the MCP registry (`mcp-publish`), update the GitHub repo description
   (it still says "lets Claude").
-- Push `feat/universal-package`, merge to `main`, tag `v1.0.0`.
+- Push `main`, tag `v1.0.0`.
 - Optional: host the HTTP transport (Render) for zero-install URL clients. Held back on purpose:
   an open proxy to RMP invites abuse and an IP block.
 

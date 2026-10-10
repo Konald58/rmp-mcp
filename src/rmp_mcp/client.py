@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import weakref
 from base64 import b64decode, b64encode
-from weakref import WeakKeyDictionary
 
 import httpx
 
@@ -77,17 +78,19 @@ query TeacherDetails($id: ID!) {
 }
 """
 
-_semaphores: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = WeakKeyDictionary()
+# (weakref to the loop, semaphore). A Semaphore keeps a strong reference to
+# its loop once contended, so the cache must not hold the loop itself or every
+# closed test loop would stay alive.
+_sem_cache: tuple[weakref.ref, asyncio.Semaphore] | None = None
 
 
 def _semaphore() -> asyncio.Semaphore:
-    """One semaphore per event loop, so tests and servers never share a stale one."""
+    """One semaphore per running event loop, rebuilt when the loop changes."""
+    global _sem_cache
     loop = asyncio.get_running_loop()
-    sem = _semaphores.get(loop)
-    if sem is None:
-        sem = asyncio.Semaphore(MAX_INFLIGHT)
-        _semaphores[loop] = sem
-    return sem
+    if _sem_cache is None or _sem_cache[0]() is not loop:
+        _sem_cache = (weakref.ref(loop), asyncio.Semaphore(MAX_INFLIGHT))
+    return _sem_cache[1]
 
 
 async def gql(query: str, variables: dict) -> dict:
@@ -98,7 +101,7 @@ async def gql(query: str, variables: dict) -> dict:
                 RMP_URL, headers=HEADERS, json={"query": query, "variables": variables}
             )
             resp.raise_for_status()
-            return resp.json()
+            payload = resp.json()
     except httpx.TimeoutException as exc:
         logger.warning("RMP request timed out: %s", exc)
         raise RMPError("Rate My Professors took too long to respond. Please try again.") from exc
@@ -113,6 +116,26 @@ async def gql(query: str, variables: dict) -> dict:
     except ValueError as exc:
         logger.warning("RMP response was not valid JSON: %s", exc)
         raise RMPError("Rate My Professors returned an unexpected response.") from exc
+    return _checked(payload)
+
+
+def _checked(payload: object) -> dict:
+    """Reject non-object payloads and GraphQL errors that carry no data at all."""
+    if not isinstance(payload, dict):
+        logger.warning("RMP response was not a JSON object: %r", type(payload).__name__)
+        raise RMPError("Rate My Professors returned an unexpected response.")
+    errors = payload.get("errors")
+    if errors and not payload.get("data"):
+        message = ""
+        if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+            message = str(errors[0].get("message") or "")[:120]
+        logger.warning("RMP GraphQL error: %s", message)
+        raise RMPError(
+            "Rate My Professors rejected the request"
+            + (f": {message}" if message else ".")
+            + " Check the school_id (use search_school) and try again."
+        )
+    return payload
 
 
 def _edges(data: dict, *path: str) -> list[dict]:
@@ -142,21 +165,36 @@ async def teacher_details(graphql_id: str) -> dict | None:
     return node if isinstance(node, dict) and node.get("id") else None
 
 
+def _is_ascii_digits(value: str) -> bool:
+    return value.isascii() and value.isdigit()
+
+
 def numeric_id(graphql_id: str) -> str | None:
     """'VGVhY2hlci0xMjM=' -> '123'. None if the id is not RMP-shaped."""
     try:
-        tail = b64decode(graphql_id).decode().split("-").pop()
+        tail = b64decode(graphql_id, validate=True).decode().split("-").pop()
     except Exception:  # noqa: BLE001 - any decode failure means "not an RMP id"
         return None
-    return tail if tail.isdigit() else None
+    return tail if _is_ascii_digits(tail) else None
+
+
+def _graphql_id(kind: str, value: str, url_segment: str) -> str:
+    """Accept a GraphQL id, a bare numeric id, or an RMP URL; return the GraphQL id."""
+    value = value.strip()
+    m = re.search(rf"/{url_segment}/(\d+)", value)
+    if m:
+        value = m.group(1)
+    if _is_ascii_digits(value):
+        return b64encode(f"{kind}-{value}".encode()).decode()
+    return value
 
 
 def teacher_graphql_id(value: str) -> str:
-    """Accept either a GraphQL id or a bare numeric professor id and return the GraphQL id."""
-    value = value.strip()
-    if value.isdigit():
-        return b64encode(f"Teacher-{value}".encode()).decode()
-    return value
+    return _graphql_id("Teacher", value, "professor")
+
+
+def school_graphql_id(value: str) -> str:
+    return _graphql_id("School", value, "school")
 
 
 def professor_url(graphql_id: str) -> str:

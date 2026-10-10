@@ -149,11 +149,11 @@ args = ["rmp-mcp"]
 These need a reachable HTTP endpoint. Run the server with the HTTP transport, expose it (a tunnel such as `cloudflared` or `ngrok` is enough for personal use), and add the URL as a custom connector:
 
 ```bash
-rmp-mcp --transport http --host 0.0.0.0 --port 8000
-# endpoint: http://<your-host>:8000/mcp
+rmp-mcp --transport http --port 8000
+# endpoint: http://127.0.0.1:8000/mcp, which the tunnel forwards
 ```
 
-The server has no authentication of its own. Put it behind your tunnel's access controls rather than on the open internet.
+**Security.** The server has no authentication of its own, and one `get_top_professors` call makes 26 upstream requests, so an open endpoint is a free proxy against RMP. Keep the default `127.0.0.1` bind and let the tunnel do the exposure, turn on the tunnel's access controls (Cloudflare Access, ngrok OAuth or a basic-auth header), and never bind `0.0.0.0` on a shared network. The server logs a warning when it is bound to a non-loopback host.
 
 ## Try it
 
@@ -192,7 +192,11 @@ ruff check src tests
 bandit -r src
 ```
 
-Layout: `src/rmp_mcp/client.py` (GraphQL client, concurrency cap, error mapping), `matching.py` (name parsing and strict matching), `server.py` (tools and CLI). The root `server.py` is a shim so configs from before 1.0 keep working.
+Layout: `src/rmp_mcp/client.py` (GraphQL client, concurrency cap, error mapping), `matching.py` (name parsing and strict matching), `server.py` (tools and CLI). The root `server.py` is a shim so configs from before 1.0 keep working; it needs fastmcp 3 in that environment (`pip install -e .` in the old venv).
+
+## MCP registry
+
+Listed as `mcp-name: io.github.konald58/rmp-mcp` for the official [MCP registry](https://registry.modelcontextprotocol.io).
 
 ## Disclaimer
 

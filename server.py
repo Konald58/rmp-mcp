@@ -7,7 +7,7 @@ The server lives in src/rmp_mcp/. Prefer the `rmp-mcp` console script or `uvx rm
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "src"))
 
 from rmp_mcp.server import main  # noqa: E402
 

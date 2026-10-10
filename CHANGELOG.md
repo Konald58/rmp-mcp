@@ -15,10 +15,16 @@ First packaged release. Works with any MCP client, not only Claude.
 - Tool annotations (`readOnlyHint`, `idempotentHint`, `openWorldHint`) so clients that gate on them do not prompt per call.
 - `server.json` for the official MCP registry, MIT `LICENSE`, this changelog.
 - Test suite with canned GraphQL responses (no live calls).
+- `school_id` and `professor_id` accept a GraphQL id, a bare numeric id, or the RMP profile URL.
+- Input bounds at the tool boundary (name lengths, `min_ratings` 0 to 10,000, at most 10 names per comparison, duplicates removed).
+- Review comments are capped at 500 characters and flagged `untrusted_content`; the server instructions tell clients that names and review text are data, not instructions.
+- `compare_professors` and `get_top_professors` report partial failures instead of aborting the whole call.
+- HTTP transport logs a warning when bound to a non-loopback host.
 
 ### Changed
 - `search_school` returns up to five campuses, best first, instead of collapsing to one.
-- `search_professor` and `compare_professors` use strict matching (exact last name, then first name, then initial) and return every surviving candidate with an `ambiguous` flag. They no longer silently return the first search hit.
+- `search_professor` and `compare_professors` use strict matching: the last name must match, a first initial must match, an exact first name wins. Every surviving candidate is returned with an `ambiguous` flag, a first name that matched nobody is reported, and a wrong initial is "not found" rather than a guess. Middle initials, suffixes (`Jr.`, `PhD`), honorifics, hyphens, curly apostrophes and accents are handled.
+- Any error reaching a client is a `ToolError` with a user-safe message; RMP's HTTP 200 + `errors` responses (typically a bad `school_id`) are reported as such instead of "not found".
 - `get_top_professors` sweeps all 26 letters, capped at six concurrent requests.
 - `compare_professors` looks names up concurrently.
 - Removed the "tested at USF only" caveats; verified at USF, NAU and UCF on 2026-10-09.

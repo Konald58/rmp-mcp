@@ -1,55 +1,71 @@
 # AGENTS.md — rmp-mcp
 
-MCP server that lets Claude search, compare, and rank professors using Rate My Professors data.
-Companion to the `rmp-extension` Chrome extension; same public RMP GraphQL endpoint, conversational interface instead of in-page injection.
+MCP server that lets any MCP client (Claude, Cursor, VS Code, Windsurf, Gemini CLI, Codex, Zed,
+ChatGPT over HTTP) search, compare and rank professors using Rate My Professors data. Companion to
+the `rmp-extension` Chrome extension; same public RMP GraphQL endpoint, conversational interface
+instead of in-page injection.
 
 ## Stack
 
-- Python 3.12, single-file server (`server.py`)
-- [FastMCP](https://github.com/jlowin/fastmcp) (`fastmcp>=2.0`) for the MCP server/tool decorators
+- Python 3.10+, `src/` layout, `pyproject.toml` (setuptools), console script `rmp-mcp`
+- [FastMCP](https://github.com/jlowin/fastmcp) `>=3,<4` for the server and tool registration
 - `httpx` for the RMP GraphQL calls
-- No database, no auth, no API key — hits RMP's public GraphQL endpoint directly
+- No database, no auth, no API key: hits RMP's public GraphQL endpoint directly
 
 ## Run
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python server.py
+pip install -e ".[dev]"
+rmp-mcp                                   # stdio (default)
+rmp-mcp --transport http --port 8000      # Streamable HTTP at /mcp, binds 127.0.0.1
 ```
 
-Register with Claude Code / Desktop:
-
-```bash
-claude mcp add-json rmp-mcp '{
-  "type": "stdio",
-  "command": "/absolute/path/to/rmp-mcp/.venv/bin/python",
-  "args": ["/absolute/path/to/rmp-mcp/server.py"]
-}'
-```
+Local Claude Code registration points at `.venv/bin/rmp-mcp`. Other clients: see README.
 
 ## Test
 
-No automated test suite yet. Manual verification: register the server, then in Claude ask it to search a known school (e.g. "University of South Florida") and a known professor, and confirm the tool calls return data.
+```bash
+pytest                    # canned GraphQL responses, no network; 80% coverage gate
+ruff check src tests && ruff format --check src tests
+bandit -r src
+```
+
+Live check (hits RMP): run the tools through `fastmcp.Client` against `server.mcp`, or ask a
+registered client to search a known school.
 
 ## Layout
 
-- `server.py` — the entire server: GraphQL query strings, `_gql` HTTP helper, `RMPError`, and the four `@mcp.tool()` functions
-- `requirements.txt` — `fastmcp`, `httpx`
-- `.venv/` — local virtualenv, gitignored
-- `docs/decisions.md`, `docs/plans/`, `docs/notes/` — project history and working notes
+- `src/rmp_mcp/client.py` — GraphQL query strings, `gql()` with a 6-wide semaphore per event
+  loop and all network/HTTP/JSON error handling (`RMPError`), id helpers (GraphQL id, numeric id
+  or RMP URL in; GraphQL id out)
+- `src/rmp_mcp/matching.py` — `parse_name` and `match_professors` (strict rules below)
+- `src/rmp_mcp/formatting.py` — node-to-dict shaping, `dedupe_names`
+- `src/rmp_mcp/server.py` — the five tools, annotations, `main()` CLI
+- `server.py` (root) — compatibility shim for pre-1.0 configs; adds `src/` to `sys.path`
+- `server.json` — MCP registry manifest; `CHANGELOG.md`; `docs/decisions.md`, `docs/plans/`
 
 ## Tools exposed
 
-- `search_school` — find a school by name → school ID
-- `search_professor` — look up a professor at a school
-- `compare_professors` — compare multiple professors side by side
-- `get_top_professors` — top-rated professors at a school, optionally by department
+- `search_school` — name → up to five campuses, best first, with `school_id`
+- `search_professor` — one professor; `ambiguous` flag plus `candidates` when several match
+- `get_professor_details` — rating distribution and five recent reviews (`untrusted_content`)
+- `compare_professors` — up to ten names, concurrent lookups, partial failures reported
+- `get_top_professors` — 26-letter search sweep, department filter, `min_ratings` gate
 
 ## Conventions and pitfalls
 
-- Deliberately single-file. Don't split into a package unless the file genuinely outgrows readability — this is a small, focused server.
-- `_gql()` is the only place that talks to RMP; all network/HTTP/JSON error handling goes through it and raises `RMPError`. New tools should call `_gql`, not `httpx` directly.
-- RMP's GraphQL endpoint is unofficial and undocumented — it can change shape without notice. Verified only against University of South Florida; other schools are expected to work (same endpoint) but are unverified.
-- School/professor IDs from RMP are base64-encoded GraphQL node IDs (see `_professor_url`'s `b64decode` usage) — don't assume they're plain integers.
-- No LICENSE file yet on this public repo.
+- `client.gql()` is the only place that talks to RMP. New tools call the `client.search_*` /
+  `teacher_details` helpers, never `httpx` directly.
+- Matching is strict, same as the extension: exact last name; a first initial must match; an
+  exact first name wins; several survivors mean `ambiguous: true` with every candidate listed.
+  Never return the first search hit silently.
+- Tool bodies are wrapped so `RMPError` becomes a `ToolError` with a user-safe message;
+  `mask_error_details=True` hides anything else. Do not let raw tracebacks reach clients.
+- RMP's endpoint is unofficial: HTTP 200 with `errors` and no `data` is treated as a failure
+  (bad `school_id` is the usual cause). Verified at USF, NAU and UCF on 2026-10-09.
+- IDs are base64 GraphQL node ids (`Teacher-123`, `School-1262`); helpers accept numeric ids and
+  profile URLs so users can paste from the site.
+- Review comments, names and departments are public input: capped in length, flagged
+  `untrusted_content`, and described as data in the server instructions.
+- Files stay under 400 lines; `server.py` is the one to watch when adding tools.
