@@ -11,35 +11,31 @@ Windsurf, Gemini CLI, Codex, Zed, ChatGPT over HTTP) search, compare and rank pr
 using Rate My Professors' public GraphQL endpoint. Companion to `rmp-extension`: same data,
 conversational interface instead of in-page injection.
 
-## Where it stands (2026-10-10)
+## Where it stands (2026-10-10 21:00)
 
-- **1.0.0 built and merged to `main` (local), not yet pushed or published.** Restructured into
-  `src/rmp_mcp/` (`client.py`, `matching.py`, `server.py`) with `pyproject.toml`, an
-  `rmp-mcp` console script, `--transport stdio|http`, tool annotations, MIT LICENSE,
-  CHANGELOG, `server.json` for the MCP registry, and a README with a config block per client.
-  Root `server.py` is a compatibility shim.
-- Five tools: `search_school` (now returns campuses), `search_professor` and
-  `compare_professors` (strict matching ported from the extension, `ambiguous` flag plus
-  candidate list instead of a silent first hit), new `get_professor_details` (distribution plus
-  five recent reviews), `get_top_professors` (26-letter sweep, 6 concurrent max).
-- 64 tests with canned GraphQL responses, 98% coverage, ruff and bandit clean. A fresh-context
-  review (2026-10-10) found 15 items; all fixed: strict matching now rejects a wrong first initial
-  and flags an unmatched first name, middle initials and suffixes parse, GraphQL `errors` and
-  non-object payloads raise `RMPError`, errors reach clients as `ToolError`, partial failures are
-  reported, inputs are bounded, review text is capped and flagged untrusted, HTTP bind warns off
-  loopback, the semaphore cache holds a weakref, ids accept URLs. Live-verified at
-  USF, NAU and UCF on 2026-10-09 (the old "USF only" caveat is gone).
-- Local Claude Code registration switched to the console script (`.venv/bin/rmp-mcp`).
-- Wheel and sdist built in `dist/`.
+- **1.0.0 pushed and tagged** (`v1.0.0`, GitHub release with wheel and sdist attached). GitHub
+  description updated. CI (`test.yml`: ruff, bandit, pytest on 3.10 and 3.12) green.
+- **Not on PyPI yet.** Publishing is tokenless via `.github/workflows/publish.yml` (PyPI
+  Trusted Publishing, environment `pypi`); the Trusted Publisher entry on pypi.org still has to
+  be created, which needs Kon signed in to pypi.org (tab open in Chrome). Then run the
+  workflow (Actions tab or `gh workflow run publish.yml`).
+- **Not in the MCP registry yet.** `mcp-publisher` 1.8.1 is installed (Homebrew). After PyPI:
+  `mcp-publisher login github` (device code, Kon's click) then `mcp-publisher publish` in the
+  repo. The README carries `mcp-name: io.github.konald58/rmp-mcp` for the registry's check.
+- Package: `src/rmp_mcp/` (`client.py`, `matching.py`, `formatting.py`, `server.py`),
+  `rmp-mcp` console script, `--transport stdio|http`, five tools with annotations, strict
+  matching ported from the extension, `get_professor_details`, 6-wide request cap. Root
+  `server.py` is a shim. 64 tests, 98% coverage. Wheel verified in a clean venv. Local Claude
+  Code registration uses `.venv/bin/rmp-mcp`.
+- Two fresh-context reviews, all findings fixed. Pre-public-release gates passed on the shipped
+  tree.
 
 ## Next up
 
-- Kon's go, then: `twine upload dist/*` to PyPI (name `rmp-mcp` is free), publish
-  `server.json` to the MCP registry (`mcp-publish`), update the GitHub repo description
-  (it still says "lets Claude").
-- Push `main`, tag `v1.0.0`.
-- Optional: host the HTTP transport (Render) for zero-install URL clients. Held back on purpose:
-  an open proxy to RMP invites abuse and an IP block.
+1. Kon signs in to pypi.org; add Trusted Publisher (owner Konald58, repo rmp-mcp, workflow
+   publish.yml, environment pypi); run the publish workflow; confirm `pip install rmp-mcp`.
+2. `mcp-publisher login github` (Kon's device-code click), then `mcp-publisher publish`.
+3. Optional: hosted HTTP transport. Deferred on purpose (no auth, open proxy to RMP).
 
 ## Open questions
 

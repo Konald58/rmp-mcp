@@ -7,3 +7,4 @@
 - 2026-10-10 — Professor matching is strict (exact last name, then first name, then initial) and returns every surviving candidate with an `ambiguous` flag. Silently returning the first search hit was the same wrong-professor bug the extension fixed in May.
 - 2026-10-10 — Concurrent RMP requests capped at 6 (one semaphore per event loop), matching the extension. `get_top_professors` sweeps all 26 letters.
 - 2026-10-10 — HTTP transport is a CLI flag, not a hosted service. Hosting is deferred: no auth on the server and an open proxy to RMP invites abuse.
+- 2026-10-10 — PyPI publishing is tokenless: GitHub Actions `publish.yml` with PyPI Trusted Publishing (OIDC, environment `pypi`). No PyPI token is stored on any machine. Registry publishing follows PyPI, via `mcp-publisher`.
