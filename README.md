@@ -182,6 +182,8 @@ The server talks to the same public GraphQL endpoint the RMP website uses, with 
 
 ## Development
 
+Releases are published to PyPI by `.github/workflows/publish.yml` through PyPI Trusted Publishing (no tokens); CI runs lint, bandit and tests on every push.
+
 ```bash
 git clone https://github.com/Konald58/rmp-mcp.git
 cd rmp-mcp

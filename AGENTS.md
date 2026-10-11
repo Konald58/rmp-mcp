@@ -34,6 +34,10 @@ bandit -r src
 Live check (hits RMP): run the tools through `fastmcp.Client` against `server.mcp`, or ask a
 registered client to search a known school.
 
+CI (`.github/workflows/test.yml`) runs ruff, bandit and pytest on 3.10 and 3.12. Releases publish to PyPI
+via `.github/workflows/publish.yml` (Trusted Publishing, `pypi` environment, no token) on a published
+GitHub release or by hand; the registry entry is published afterwards with `mcp-publisher`.
+
 ## Layout
 
 - `src/rmp_mcp/client.py` — GraphQL query strings, `gql()` with a 6-wide semaphore per event
